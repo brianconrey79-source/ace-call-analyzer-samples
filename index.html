@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACE Analyzer v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --red: #EB1000; --red-dark: #B30D00;
+    --blue: #4B5CE4; --blue-light: #6B7CF0;
+    --dark: #0D0D0F; --mid: #1A1A1F; --card: #22222A;
+    --border: #2E2E3A; --text: #F0F0F5; --muted: #7A7A90;
+    --green: #2ECC71; --amber: #F39C12; --surface: #18181E;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--dark); color:var(--text); min-height:100vh; overflow-x:hidden; }
+
+  header {
+    background:var(--mid); border-bottom:1px solid var(--border);
+    padding:16px 28px; display:flex; align-items:center; gap:12px;
+    position:sticky; top:0; z-index:100;
+  }
+  .logo-badge { background:var(--red); color:#fff; font-weight:700; font-size:12px; letter-spacing:1.5px; padding:5px 9px; border-radius:4px; }
+  .v2-badge { background:var(--blue); color:#fff; font-size:10px; font-weight:700; padding:3px 7px; border-radius:4px; letter-spacing:1px; }
+  header h1 { font-size:16px; font-weight:600; }
+  header .sub { font-size:12px; color:var(--muted); font-weight:400; margin-left:4px; }
+
+  .main { display:grid; grid-template-columns:1fr 1fr; height:calc(100vh - 57px); }
+
+  /* LEFT */
+  .input-panel { background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:24px; gap:16px; overflow-y:auto; }
+  .panel-label { font-size:10px; font-weight:700; letter-spacing:1.8px; color:var(--muted); text-transform:uppercase; }
+
+  .meta-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .meta-field { display:flex; flex-direction:column; gap:6px; }
+  .meta-field input {
+    background:var(--card); border:1px solid var(--border); border-radius:6px;
+    color:var(--text); font-family:'DM Sans',sans-serif; font-size:13px;
+    padding:9px 12px; outline:none; transition:border-color 0.2s;
+  }
+  .meta-field input:focus { border-color:var(--blue); }
+  .meta-field input::placeholder { color:var(--muted); }
+
+  textarea {
+    flex:1; background:var(--card); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); font-family:'DM Mono',monospace; font-size:12.5px; line-height:1.7;
+    padding:14px; resize:none; min-height:300px; outline:none; transition:border-color 0.2s;
+  }
+  textarea::placeholder { color:var(--muted); }
+  textarea:focus { border-color:var(--blue); }
+
+  .btn-analyze {
+    background:var(--red); color:#fff; border:none; border-radius:8px;
+    padding:13px 24px; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600;
+    cursor:pointer; letter-spacing:0.2px; transition:background 0.2s, transform 0.1s;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .btn-analyze:hover { background:var(--red-dark); }
+  .btn-analyze:active { transform:scale(0.98); }
+  .btn-analyze:disabled { opacity:0.5; cursor:not-allowed; }
+  .btn-analyze .spinner { width:17px; height:17px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.7s linear infinite; display:none; }
+  .btn-analyze.loading .spinner { display:block; }
+  .btn-analyze.loading .btn-text { opacity:0.7; }
+
+  /* Sample call loader */
+  .sample-loader {
+    background:rgba(75,92,228,0.08);
+    border:1px solid rgba(75,92,228,0.28);
+    border-radius:10px;
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .sample-row { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
+  .sample-select {
+    background:var(--card); border:1px solid var(--border); border-radius:6px;
+    color:var(--text); font-family:'DM Sans',sans-serif; font-size:13px;
+    padding:9px 12px; outline:none; transition:border-color 0.2s;
+  }
+  .sample-select:focus { border-color:var(--blue); }
+  .btn-secondary {
+    background:var(--blue); color:#fff; border:none; border-radius:6px;
+    padding:9px 13px; font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600;
+    cursor:pointer; transition:background 0.2s, transform 0.1s; white-space:nowrap;
+  }
+  .btn-secondary:hover { background:var(--blue-light); }
+  .btn-secondary:active { transform:scale(0.98); }
+  .sample-help { font-size:11.5px; color:var(--muted); line-height:1.5; }
+
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* RIGHT */
+  .output-panel { background:var(--dark); overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:20px; }
+
+  .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:14px; color:var(--muted); text-align:center; }
+  .empty-state .icon { font-size:44px; opacity:0.25; }
+  .empty-state p { font-size:14px; line-height:1.6; max-width:260px; }
+
+  .analyzing-overlay { display:none; flex-direction:column; align-items:center; justify-content:center; gap:18px; height:100%; color:var(--muted); }
+  .analyzing-overlay.show { display:flex; }
+  .pulse-ring { width:56px; height:56px; border:3px solid var(--red); border-radius:50%; animation:pulse-out 1.4s ease-out infinite; }
+  @keyframes pulse-out { 0%{transform:scale(0.8);opacity:1} 100%{transform:scale(1.4);opacity:0} }
+  .analyzing-overlay p { font-size:13px; letter-spacing:0.5px; }
+
+  #resultsContainer { display:none; flex-direction:column; gap:20px; }
+
+  .section-title { font-size:10px; font-weight:700; letter-spacing:2px; color:var(--muted); text-transform:uppercase; display:flex; align-items:center; gap:10px; }
+  .section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* Stage indicator */
+  .stage-indicator { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; display:flex; align-items:center; gap:16px; }
+  .stage-number { background:var(--red); color:#fff; font-size:20px; font-weight:700; width:46px; height:46px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-family:'DM Mono',monospace; }
+  .stage-info h2 { font-size:15px; font-weight:700; margin-bottom:3px; }
+  .stage-info p { font-size:12px; color:var(--muted); line-height:1.5; }
+
+  /* Stage bar */
+  .stage-track { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 18px; }
+  .stage-bar { display:flex; gap:4px; margin-top:10px; }
+  .stage-pip { flex:1; height:7px; border-radius:4px; background:var(--border); }
+  .stage-pip.active { background:var(--red); }
+  .stage-pip.done { background:var(--blue); }
+  .stage-labels { display:flex; gap:4px; margin-top:5px; }
+  .stage-lbl { flex:1; font-size:8.5px; color:var(--muted); text-align:center; font-family:'DM Mono',monospace; line-height:1.4; }
+  .stage-lbl.active { color:var(--red); font-weight:700; }
+  .stage-lbl.done { color:var(--blue-light); }
+
+  /* ICED */
+  .iced-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .iced-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; position:relative; overflow:hidden; }
+  .iced-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+  .iced-card.complete::before { background:var(--green); }
+  .iced-card.partial::before { background:var(--amber); }
+  .iced-card.missing::before { background:var(--red); }
+  .iced-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .iced-letter { background:var(--blue); color:#fff; font-size:13px; font-weight:700; width:28px; height:28px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-family:'DM Mono',monospace; }
+  .iced-status { font-size:10px; font-weight:600; padding:2px 7px; border-radius:20px; text-transform:uppercase; letter-spacing:0.8px; }
+  .iced-status.complete { background:rgba(46,204,113,0.15); color:var(--green); }
+  .iced-status.partial { background:rgba(243,156,18,0.15); color:var(--amber); }
+  .iced-status.missing { background:rgba(235,16,0,0.15); color:var(--red); }
+  .iced-title { font-size:12px; font-weight:600; margin-bottom:5px; }
+  .iced-desc { font-size:11.5px; color:var(--muted); line-height:1.55; }
+
+  /* Red flags & next steps */
+  .red-flags { background:rgba(235,16,0,0.07); border:1px solid rgba(235,16,0,0.25); border-radius:10px; padding:14px 18px; }
+  .red-flags h3 { font-size:11px; font-weight:700; color:var(--red); text-transform:uppercase; letter-spacing:1px; margin-bottom:9px; }
+  .red-flags li { font-size:12px; color:#f08080; line-height:1.5; padding-left:14px; position:relative; margin-bottom:5px; }
+  .red-flags li::before { content:'⚑'; position:absolute; left:0; font-size:10px; }
+
+  .next-steps { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .next-steps h3 { font-size:12px; font-weight:600; margin-bottom:10px; }
+  .next-steps li { font-size:12px; color:var(--muted); line-height:1.6; padding-left:16px; position:relative; margin-bottom:6px; }
+  .next-steps li::before { content:'→'; position:absolute; left:0; color:var(--red); font-weight:700; }
+
+  /* Shared copy block */
+  .copy-block { background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .copy-header { background:var(--mid); padding:12px 18px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+  .copy-header h3 { font-size:12px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  .msft-badge { background:#0078d4; color:#fff; font-size:10px; font-weight:700; padding:3px 7px; border-radius:4px; letter-spacing:0.5px; }
+  .copy-body { padding:16px 18px; }
+
+  .btn-copy { background:var(--border); color:var(--text); border:none; border-radius:6px; padding:5px 13px; font-size:11px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; transition:background 0.2s; display:flex; align-items:center; gap:5px; }
+  .btn-copy:hover { background:var(--blue); }
+  .btn-copy.copied { background:var(--green); color:#fff; }
+
+  /* 5-bullet summary */
+  .dynamics-bullet { display:flex; gap:10px; align-items:flex-start; margin-bottom:9px; }
+  .bullet-num { background:var(--blue); color:#fff; font-size:10px; font-weight:700; min-width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-top:2px; font-family:'DM Mono',monospace; }
+  .bullet-text { font-size:12.5px; color:var(--text); line-height:1.6; }
+
+  /* Dynamics template */
+  .template-block { display:flex; flex-direction:column; gap:8px; }
+  .tmpl-row { display:flex; flex-direction:column; gap:3px; }
+  .tmpl-label { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:1.2px; }
+  .tmpl-value { font-size:13px; color:var(--text); line-height:1.6; background:var(--surface); border-radius:5px; padding:8px 12px; border:1px solid var(--border); }
+  .tmpl-value.stakeholders { display:flex; flex-direction:column; gap:4px; }
+  .tmpl-value.stakeholders span { font-size:12.5px; }
+
+  /* Call summary */
+  .summary-text { font-size:12.5px; color:var(--muted); line-height:1.7; background:var(--surface); border-radius:5px; padding:12px; border:1px solid var(--border); }
+
+  .error-box { background:rgba(235,16,0,0.1); border:1px solid rgba(235,16,0,0.3); border-radius:8px; padding:14px; font-size:12.5px; color:#f08080; line-height:1.6; }
+
+  ::-webkit-scrollbar { width:5px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  @media (max-width:860px) {
+    .main { grid-template-columns:1fr; height:auto; }
+    .iced-grid { grid-template-columns:1fr; }
+    .meta-row { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span class="logo-badge">ACE</span>
+    <span class="v2-badge">V2</span>
+  </div>
+  <h1>Call Transcript Analyzer <span class="sub">— Adobe Corporate Sales Process</span></h1>
+</header>
+
+<div class="main">
+
+  <!-- LEFT -->
+  <div class="input-panel">
+    <span class="panel-label">Rep Details</span>
+    <div class="meta-row">
+      <div class="meta-field">
+        <span class="panel-label">Your Initials</span>
+        <input type="text" id="repInitials" placeholder="e.g. JD" maxlength="5">
+      </div>
+      <div class="meta-field">
+        <span class="panel-label">Actual ASV ($)</span>
+        <input type="text" id="actualAsv" placeholder="e.g. $48,000">
+      </div>
+    </div>
+    <div class="meta-field">
+      <span class="panel-label">Products Discussed</span>
+      <input type="text" id="products" placeholder="e.g. Acrobat Pro AI, Sign, Acrobat Services">
+    </div>
+
+    <span class="panel-label" style="margin-top:4px;">Call Transcript</span>
+    <textarea id="transcriptInput" placeholder="Paste your full call transcript here…"></textarea>
+
+    <div class="sample-loader">
+      <span class="panel-label">Sample Call Loader</span>
+      <div class="sample-row">
+        <select id="sampleCallSelect" class="sample-select">
+          <option value="">Choose a sample call...</option>
+          <option value="weak">Looks good but actually weak</option>
+          <option value="perfect">Perfect ACE call</option>
+          <option value="stuck">Late-stage stuck deal</option>
+        </select>
+        <button class="btn-secondary" type="button" onclick="loadSelectedSampleCall()">Load Sample</button>
+      </div>
+      <div class="sample-help">Paste your real sample scripts into the SAMPLE_CALLS section in index.html. Loading a sample fills the rep details, product field, and transcript box.</div>
+    </div>
+
+    <button class="btn-analyze" id="analyzeBtn" onclick="analyzeTranscript()">
+      <div class="spinner"></div>
+      <span class="btn-text">Analyze Against ACE Framework</span>
+    </button>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="output-panel" id="outputPanel">
+    <div class="empty-state" id="emptyState">
+      <div class="icon">◎</div>
+      <p>Fill in your details, paste a transcript, and click Analyze to get your ACE assessment + Dynamics CRM template.</p>
+    </div>
+    <div class="analyzing-overlay" id="analyzingOverlay">
+      <div class="pulse-ring"></div>
+      <p>Analyzing against ACE framework…</p>
+    </div>
+    <div id="resultsContainer"></div>
+  </div>
+</div>
+
+<script>
+const ACE_SYSTEM_PROMPT = `You are an expert Adobe sales coach analyzing call transcripts against Adobe's Corporate Sales Process (ACE / ICED framework).
+
+## Adobe Corporate Sales Process — 7 Stages
+Stage 1 — Prospecting: Find a potential opportunity. CVO: Target persona confirms attendance to initial discovery meeting.
+Stage 2 — Opportunity Evaluation: Connect with a Potential Champion solving a critical business issue. CVO: Potential Champion confirms Identified Pain and commits to explore further.
+Stage 3 — Qualification: Align on full scope with all key stakeholders, identify Economic Buyer. CVO: Champion defines use cases, confirms Economic Buyer and compelling event.
+Stage 4 — Value Mapping: Influence decision-making process, map business/technical value. CVO: Champion confirms Implicated Pain with business impact, co-authors MAP and Technical Validation, Economic Buyer aligns on path to purchase.
+Stage 5 — Solution Validation: Execute Mutual Action Plan and Technical Validation, secure business & technical win. CVO: Champion confirms business & technical win, Executive Proposal meeting scheduled.
+Stage 6 — Economic Buyer Commit: Get commitment from Economic Buyer, map signature process. CVO: Economic Buyer confirms intent to purchase, contract received.
+Stage 7 — Execute to Close: Complete contract signature. CVO: Customer signs.
+
+## ICED Qualification Framework
+I — Identify & Implicate Pain: Problem serious enough to need a solution, implicated to quantifiable business impact (Revenue/Cost/Risk).
+C — Champion: Person with power and influence acting as internal seller; tested by access given, co-building path to purchase, aligning with Economic Buyer.
+E — Economic Buyer: Person with overall authority, access to funds, will sign contract.
+D — Decision Process & Criteria: Steps customer will use to decide, criteria to judge solution; should differentiate from competition and align to compelling event.
+
+## Red Flags
+- Lack of research / clear hypothesis of business pain
+- Working with Coach vs. Champion
+- No Implicated Pain to business value, single-threaded, no wide stakeholder engagement
+- No Economic Buyer engagement, misaligned Decision Process/Criteria
+- No clarity on path to purchase
+
+## Output Instructions
+Return ONLY a valid JSON object — no markdown, no code fences, no explanation. Use this exact structure:
+
+{
+  "callSummary": "3-4 sentence narrative summary of the call covering what was discussed, key pain points surfaced, stakeholders present, and any commitments made.",
+  "currentStage": { "number": 2, "name": "Opportunity Evaluation" },
+  "stageRationale": "1-2 sentences citing evidence from the transcript.",
+  "iced": {
+    "I": { "status": "complete", "title": "Identify & Implicate Pain", "finding": "One sentence finding." },
+    "C": { "status": "partial", "title": "Champion", "finding": "One sentence finding." },
+    "E": { "status": "missing", "title": "Economic Buyer", "finding": "One sentence finding." },
+    "D": { "status": "missing", "title": "Decision Process & Criteria", "finding": "One sentence finding." }
+  },
+  "nextSteps": ["Action 1", "Action 2", "Action 3", "Action 4"],
+  "redFlags": [],
+  "dynamicsBullets": ["Bullet 1", "Bullet 2", "Bullet 3", "Bullet 4", "Bullet 5"],
+  "dynamicsTemplate": {
+    "currentStatusLastAction": "Max 150 chars. Past tense. What happened on this call.",
+    "nextAction": "Max 150 chars. Single most important next step + target date if known.",
+    "championPoc": "Max 80 chars. Name and title if mentioned, else 'TBD'.",
+    "economicBuyer": "Max 80 chars. Name and title if mentioned, else 'Not yet identified'.",
+    "primaryRisk": "Max 150 chars. Biggest risk to this deal progressing.",
+    "leadershipHelpNeeded": "Max 150 chars. Specific ask, or 'None at this time'."
+  }
+}
+
+Status values: "complete", "partial", or "missing" only.
+dynamicsBullets: 5 concise past-tense professional CRM bullets covering (1) topics discussed, (2) pain identified, (3) stakeholders involved, (4) ICED status, (5) next steps.`;
+
+// ─────────────────────────────────────────────────────────────
+// SAMPLE CALLS
+// Paste your sample scripts between the backticks in each transcript field.
+// Keep the object keys exactly as-is: weak, perfect, stuck.
+// ─────────────────────────────────────────────────────────────
+const SAMPLE_CALLS = {
+  weak: {
+    initials: "S1",
+    asv: "$48,000",
+    products: "Acrobat Pro AI, Acrobat Studio",
+    transcript: `PASTE SAMPLE SCRIPT HERE:
+
+LOOKS GOOD BUT ACTUALLY WEAK CALL
+
+Purpose: This sample should sound positive on the surface, but expose ICED gaps.
+Suggested gaps to include:
+- Customer is friendly but not a real Champion
+- Pain is described generally, not quantified
+- Economic Buyer is not identified or engaged
+- Decision process is vague
+- No clear next step or customer-owned date
+
+Rep:
+Customer:
+`
+  },
+
+  perfect: {
+    initials: "S2",
+    asv: "$125,000",
+    products: "Acrobat Studio, Sign, Acrobat Services",
+    transcript: `PASTE SAMPLE SCRIPT HERE:
+
+PERFECT ACE CALL
+
+Purpose: This sample should demonstrate what strong qualification looks like.
+Suggested strengths to include:
+- Clear implicated pain tied to cost, risk, revenue, or productivity
+- Tested Champion who gives access to stakeholders
+- Economic Buyer identified and business priority confirmed
+- Decision criteria and decision process are documented
+- Mutual next step, date, and owner are confirmed
+
+Rep:
+Customer:
+`
+  },
+
+  stuck: {
+    initials: "S3",
+    asv: "$210,000",
+    products: "ETLA, Acrobat Studio, Sign",
+    transcript: `PASTE SAMPLE SCRIPT HERE:
+
+LATE-STAGE STUCK DEAL
+
+Purpose: This sample should map to deal acceleration and stalled pipeline coaching.
+Suggested signals to include:
+- Deal is in late stage but movement has slowed
+- Legal/procurement/security review is unclear
+- Champion is not driving urgency internally
+- Economic Buyer commitment is soft or unconfirmed
+- Signature path, timing, or risk owner is missing
+
+Rep:
+Customer:
+`
+  }
+};
+
+function loadSelectedSampleCall() {
+  const type = document.getElementById('sampleCallSelect').value;
+  if (!type) {
+    alert('Please choose a sample call first.');
+    return;
+  }
+
+  const sample = SAMPLE_CALLS[type];
+  if (!sample) return;
+
+  document.getElementById('repInitials').value = sample.initials || '';
+  document.getElementById('actualAsv').value = sample.asv || '';
+  document.getElementById('products').value = sample.products || '';
+  document.getElementById('transcriptInput').value = sample.transcript || '';
+  document.getElementById('transcriptInput').focus();
+  document.getElementById('transcriptInput').scrollTop = 0;
+}
+
+async function analyzeTranscript() {
+  const transcript = document.getElementById('transcriptInput').value.trim();
+  if (!transcript) { alert('Please paste a call transcript first.'); return; }
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  document.getElementById('emptyState').style.display = 'none';
+  const rc = document.getElementById('resultsContainer');
+  rc.style.display = 'none';
+  rc.innerHTML = '';
+  document.getElementById('analyzingOverlay').classList.add('show');
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Request failed with status ${res.status}`);
+    if (!data.result) throw new Error(`Unexpected response: ${JSON.stringify(data)}`);
+
+    renderResults(data.result);
+  } catch(err) {
+    document.getElementById('analyzingOverlay').classList.remove('show');
+    rc.innerHTML = `<div class="error-box">⚠ ${err.message}</div>`;
+    rc.style.display = 'flex';
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
+function renderResults(r) {
+  document.getElementById('analyzingOverlay').classList.remove('show');
+
+  const initials = document.getElementById('repInitials').value.trim() || 'REP';
+  const asv      = document.getElementById('actualAsv').value.trim()      || 'TBD';
+  const products = document.getElementById('products').value.trim()        || 'TBD';
+  const today    = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+
+  const stages = ['Prospecting','Opp. Eval','Qualification','Value Map','Solution Val.','EB Commit','Execute'];
+  const pips   = stages.map((_,i) => `<div class="stage-pip ${i+1 < r.currentStage.number ? 'done' : i+1 === r.currentStage.number ? 'active' : ''}"></div>`).join('');
+  const lbls   = stages.map((s,i) => `<div class="stage-lbl ${i+1 < r.currentStage.number ? 'done' : i+1 === r.currentStage.number ? 'active' : ''}">${s}</div>`).join('');
+
+  const icedCards = ['I','C','E','D'].map(k => {
+    const c = r.iced[k];
+    return `<div class="iced-card ${c.status}">
+      <div class="iced-header"><div class="iced-letter">${k}</div><span class="iced-status ${c.status}">${c.status}</span></div>
+      <div class="iced-title">${c.title}</div>
+      <div class="iced-desc">${c.finding}</div>
+    </div>`;
+  }).join('');
+
+  // 5-bullet copy text
+  const bulletsText = (r.dynamicsBullets||[]).map(b=>`• ${b}`).join('\n');
+
+  // Dynamics template text
+  const dt = r.dynamicsTemplate || {};
+  const templateText =
+`${today} - ${initials}
+Actual ASV: ${asv}
+Products: ${products}
+Current Status/Last Action: ${dt.currentStatusLastAction || ''}
+Next Action: ${dt.nextAction || ''}
+Key Stakeholders
+• Champion/POC: ${dt.championPoc || 'TBD'}
+• Economic Buyer: ${dt.economicBuyer || 'Not yet identified'}
+Primary Risk: ${dt.primaryRisk || ''}
+Leadership Help Needed: ${dt.leadershipHelpNeeded || 'None at this time'}`;
+
+  const templateParagraph = `${today} - ${initials}<br>Actual ASV: ${asv}<br>Products: ${products}<br>Current Status/Last Action: ${dt.currentStatusLastAction || '—'}<br>Next Action: ${dt.nextAction || '—'}<br>Key Stakeholders<br>&nbsp;&nbsp;• Champion/POC: ${dt.championPoc || 'TBD'}<br>&nbsp;&nbsp;• Economic Buyer: ${dt.economicBuyer || 'Not yet identified'}<br>Primary Risk: ${dt.primaryRisk || '—'}<br>Leadership Help Needed: ${dt.leadershipHelpNeeded || 'None at this time'}`;
+
+  const html = `
+    <span class="section-title">Call Summary</span>
+    <div class="summary-text">${r.callSummary || ''}</div>
+
+    <span class="section-title">ACE Stage</span>
+    <div class="stage-indicator">
+      <div class="stage-number">${r.currentStage.number}</div>
+      <div class="stage-info">
+        <h2>${r.currentStage.name}</h2>
+        <p>${r.stageRationale}</p>
+      </div>
+    </div>
+    <div class="stage-track">
+      <span class="panel-label">Progression</span>
+      <div class="stage-bar">${pips}</div>
+      <div class="stage-labels">${lbls}</div>
+    </div>
+
+    <span class="section-title">ICED Qualification</span>
+    <div class="iced-grid">${icedCards}</div>
+
+    ${r.redFlags?.length ? `
+    <div class="red-flags">
+      <h3>⚑ Red Flags</h3>
+      <ul>${r.redFlags.map(f=>`<li>${f}</li>`).join('')}</ul>
+    </div>` : ''}
+
+    <div class="next-steps">
+      <h3>→ Recommended Next Steps</h3>
+      <ul>${(r.nextSteps||[]).map(s=>`<li>${s}</li>`).join('')}</ul>
+    </div>
+
+    <span class="section-title">Dynamics — 5 Bullet Summary</span>
+    <div class="copy-block">
+      <div class="copy-header">
+        <h3><span class="msft-badge">DYNAMICS</span> Activity Note</h3>
+        <button class="btn-copy" id="copyBullets" onclick="copyStored('copyBullets')">⧉ Copy</button>
+      </div>
+      <div class="copy-body">
+        ${(r.dynamicsBullets||[]).map((b,i)=>`
+          <div class="dynamics-bullet">
+            <div class="bullet-num">${i+1}</div>
+            <div class="bullet-text">${b}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <span class="section-title">Dynamics — Next Step Notes</span>
+    <div class="copy-block">
+      <div class="copy-header">
+        <h3><span class="msft-badge">DYNAMICS</span> Next Step Notes</h3>
+        <button class="btn-copy" id="copyTemplate" onclick="copyStored('copyTemplate')">⧉ Copy</button>
+      </div>
+      <div class="copy-body">
+        <div class="summary-text" style="font-size:12.5px; line-height:1.8;">${templateParagraph}</div>
+      </div>
+    </div>
+  `;
+
+  const rc = document.getElementById('resultsContainer');
+  rc.innerHTML = html;
+  rc.style.display = 'flex';
+
+  // Store copy payloads after DOM is set — avoids any inline attribute escaping issues
+  window._copyStore = { copyBullets: bulletsText, copyTemplate: templateText };
+}
+
+function copyStored(btnId) {
+  const text = window._copyStore?.[btnId] || '';
+  const btn = document.getElementById(btnId);
+
+  function onSuccess() {
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '⧉ Copy'; btn.classList.remove('copied'); }, 2200);
+  }
+
+  // Try modern Clipboard API first
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(onSuccess).catch(() => fallback());
+  } else {
+    fallback();
+  }
+
+  function fallback() {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+      onSuccess();
+    } catch(e) {
+      alert('Copy failed — please copy the text manually.');
+    }
+    document.body.removeChild(ta);
+  }
+}
+</script>
+</body>
+</html>
